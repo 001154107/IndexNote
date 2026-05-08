@@ -27,8 +27,14 @@ source_notes/ → Docling/Whisper/OpenCV → LlamaIndex → Kuzu (Graph) + Chrom
 - **Python 3.10+**
 - **Ollama** running locally ([install](https://ollama.com/download))
   ```bash
-  ollama pull llama3.1
-  ollama pull nomic-embed-text
+  # Default options (Gemma 4 natively supports vision)
+  ollama pull gemma4
+  ollama pull EmbeddingGemma
+  
+  # Or use alternative models:
+  # ollama pull llama3.1
+  # ollama pull nomic-embed-text
+  # ollama pull llava
   ```
 
 ### Setup
@@ -107,8 +113,8 @@ Edit `.env` to configure:
 | Variable | Default | Description |
 |---|---|---|
 | `LLM_PROVIDER` | `ollama` | `ollama` (local) or `gemini` (cloud) |
-| `OLLAMA_MODEL` | `llama3.1` | Ollama LLM model name |
-| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Ollama embedding model |
+| `OLLAMA_MODEL` | `gemma4` | LLM model name |
+| `OLLAMA_EMBED_MODEL` | `EmbeddingGemma` | Embedding model |
 | `GOOGLE_API_KEY` | *(empty)* | Gemini API key (if using Gemini) |
 | `CHUNK_SIZE` | `1024` | Token chunk size for indexing |
 | `AUTO_REINDEX` | `false` | Auto-reindex on file changes |
