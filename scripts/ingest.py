@@ -13,8 +13,18 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+# Fix Windows console encoding for Unicode/emoji output
+if sys.platform == "win32":
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 _project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_project_root))
@@ -27,7 +37,7 @@ from indexnote.indexing.hybrid_index import HybridIndexManager
 from indexnote.watcher.file_tracker import FileTracker
 from indexnote.watcher.file_watcher import FileWatcher
 
-console = Console()
+console = Console(force_terminal=True)
 
 
 def main():

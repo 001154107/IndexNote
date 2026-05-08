@@ -16,9 +16,19 @@ Features:
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
+
+# Fix Windows console encoding for Unicode/emoji output
+if sys.platform == "win32":
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 from rich.console import Console
 from rich.panel import Panel
@@ -34,7 +44,7 @@ from indexnote.watcher.file_tracker import FileTracker
 from indexnote.watcher.file_watcher import FileWatcher
 from indexnote.retrieval.query_engine import QueryEngine
 
-console = Console()
+console = Console(force_terminal=True)
 
 
 def print_banner():

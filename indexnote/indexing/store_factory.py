@@ -34,7 +34,14 @@ def create_kuzu_store(settings: Settings | None = None) -> tuple[kuzu.Database, 
         settings = get_settings()
 
     db_path = settings.kuzu_db_path
-    db_path.mkdir(parents=True, exist_ok=True)
+    # Ensure parent directory exists, but let Kuzu manage its own db directory
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # If the db dir exists but is empty (no Kuzu files), remove it so Kuzu can init
+    if db_path.exists() and db_path.is_dir():
+        contents = list(db_path.iterdir())
+        if not contents:
+            db_path.rmdir()
 
     logger.info("Initializing Kuzu graph database at: %s", db_path)
     db = kuzu.Database(str(db_path))

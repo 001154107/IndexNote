@@ -10,8 +10,18 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+# Fix Windows console encoding for Unicode/emoji output
+if sys.platform == "win32":
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 # Ensure project root is on sys.path
 _project_root = Path(__file__).resolve().parent.parent
@@ -23,20 +33,20 @@ from rich.table import Table
 
 from indexnote.config import Settings, get_settings, create_llm, create_embed_model
 
-console = Console()
+console = Console(force_terminal=True)
 
 
 def setup_directories(settings: Settings) -> None:
     """Create all required directories."""
+    # Note: kuzu_db_path is NOT pre-created — Kuzu manages its own directory
     dirs = [
         settings.source_notes_dir,
         settings.data_dir,
         settings.chroma_db_path,
-        settings.kuzu_db_path,
     ]
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)
-        console.print(f"  ✅ {d}")
+        console.print(f"  [green]OK[/green] {d}")
 
 
 def init_stores(settings: Settings) -> None:
