@@ -1,0 +1,1 @@
+"""IndexNote — Retrieval sub-package."""

@@ -1,0 +1,1 @@
+"""IndexNote — Utility sub-package."""

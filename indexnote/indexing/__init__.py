@@ -1,0 +1,1 @@
+"""IndexNote — Indexing sub-package."""
