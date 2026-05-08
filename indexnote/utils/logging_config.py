@@ -19,17 +19,15 @@ def setup_logging(level: str = "INFO") -> None:
     Args:
         level: Logging level string (DEBUG, INFO, WARNING, ERROR).
     """
+    # Ensure log file exists and is writable
+    log_file = "indexnote.log"
+    
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
-        format="%(message)s",
-        datefmt="[%X]",
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[
-            RichHandler(
-                rich_tracebacks=True,
-                tracebacks_show_locals=False,
-                show_path=False,
-                markup=True,
-            )
+            logging.FileHandler(log_file, encoding="utf-8")
         ],
         force=True,
     )

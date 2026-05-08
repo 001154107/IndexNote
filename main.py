@@ -124,32 +124,30 @@ def scan_and_index(
     return indexed_count
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 def handle_file_change(
     file_path: Path,
     index_manager: HybridIndexManager,
     file_tracker: FileTracker,
     settings,
 ) -> None:
-    """Handle a file change event from the watcher."""
+    """Handle a file change event from the watcher without interrupting the REPL."""
     if not is_supported_file(file_path):
         return
 
     if settings.auto_reindex:
-        console.print(f"\n[yellow]📝 Auto-reindexing: {file_path.name}[/yellow]")
+        logger.info("Auto-reindexing: %s", file_path.name)
         try:
-            count = index_manager.index_file(file_path)
+            index_manager.index_file(file_path)
             file_tracker.mark_indexed(file_path)
-            console.print(f"  [green]✅ Reindexed: {count} chunk(s)[/green]")
+            logger.info("Reindexed: %s", file_path.name)
         except Exception as e:
             file_tracker.mark_error(file_path, str(e))
-            console.print(f"  [red]❌ Failed: {e}[/red]")
-        console.print("\n[bold cyan]IndexNote>[/bold cyan] ", end="")
+            logger.error("Failed to reindex %s: %s", file_path.name, e)
     else:
-        console.print(
-            f"\n[yellow]📝 File changed: {file_path.name}. "
-            f"Use [bold]/reindex {file_path.name}[/bold] to reindex.[/yellow]"
-        )
-        console.print("[bold cyan]IndexNote>[/bold cyan] ", end="")
+        logger.info("File changed (not auto-indexed): %s", file_path.name)
 
 
 def cmd_status(file_tracker: FileTracker) -> None:
@@ -346,6 +344,8 @@ def main() -> None:
                     console.print(f"\n[red]Query failed: {e}[/red]\n")
 
     finally:
+        from indexnote.indexing.background_queue import BackgroundQueue
+        BackgroundQueue().shutdown()
         watcher.stop()
         file_tracker.close()
         console.print("\n[dim]Goodbye! 👋[/dim]")

@@ -129,8 +129,15 @@ class HybridIndexManager:
             logger.error("Failed to extract URLs during indexing: %s", e)
 
         # 2. Index into both stores
-        self._graph_index.insert_documents(documents)
+        # Fast Stage: Vector indexing (synchronous)
         self._vector_index.insert_documents(documents)
+        logger.info("Fast Vector Indexing complete for: %s", file_path.name)
+        
+        # Slow Stage: Graph indexing (asynchronous background queue)
+        from indexnote.indexing.background_queue import BackgroundQueue
+        queue = BackgroundQueue()
+        queue.submit(self._graph_index.insert_documents, documents)
+        logger.info("Slow Graph Indexing queued for: %s", file_path.name)
 
         logger.info("Indexed %d chunk(s) from: %s", len(documents), file_path.name)
         return len(documents)
