@@ -69,9 +69,12 @@ class QueryEngine:
         )
         self._llm = create_llm(self._settings)
 
+        self._chat_history = []
+        self._history_window = 5 # Number of previous turns to keep in context window
+
     def query(self, user_query: str) -> QueryResponse:
         """
-        Answer a user query with source citations.
+        Answer a user query with source citations, maintaining conversation history.
 
         Args:
             user_query: The user's question.
@@ -103,17 +106,32 @@ class QueryEngine:
 
         messages = [
             ChatMessage(role="system", content=_SYSTEM_PROMPT),
+        ]
+        
+        # Inject short-term chat history
+        for turn in self._chat_history[-self._history_window:]:
+            messages.append(ChatMessage(role="user", content=turn["user"]))
+            messages.append(ChatMessage(role="assistant", content=turn["assistant"]))
+
+        # Current question + Context
+        messages.append(
             ChatMessage(
                 role="user",
                 content=(
                     f"Context from indexed documents:\n\n{context}\n\n"
                     f"---\n\nUser question: {user_query}"
                 ),
-            ),
-        ]
+            )
+        )
 
         response = self._llm.chat(messages)
         answer = response.message.content
+
+        # 4. Save to short-term memory
+        self._chat_history.append({"user": user_query, "assistant": answer})
+        
+        # 5. Append to long-term memory (Chat_History.md)
+        self._log_to_chat_history(user_query, answer)
 
         logger.info("Query answered with %d sources", len(citations))
 
@@ -123,3 +141,23 @@ class QueryEngine:
             citations_display=citations_display,
             num_sources=len(citations),
         )
+
+    def _log_to_chat_history(self, query: str, answer: str) -> None:
+        """Append the QA pair to source_notes/Chat_History.md so it gets indexed."""
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        history_file = self._settings.source_notes_dir / "Chat_History.md"
+        
+        # Format the entry cleanly without terminal output
+        entry = (
+            f"\n## Conversation Turn - {timestamp}\n\n"
+            f"**User Question:**\n{query}\n\n"
+            f"**IndexNote Response:**\n{answer}\n\n"
+            f"---\n"
+        )
+        
+        try:
+            with open(history_file, "a", encoding="utf-8") as f:
+                f.write(entry)
+        except Exception as e:
+            logger.error("Failed to append to Chat_History.md: %s", e)

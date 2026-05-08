@@ -95,6 +95,11 @@ class _DebouncedHandler(FileSystemEventHandler):
 
     def _process_pending(self) -> None:
         """Background thread that processes debounced events."""
+        from indexnote.scraper.web_scraper import WebScraper
+        from indexnote.scraper.url_extractor import URLExtractor
+        
+        scraper = WebScraper()
+        
         while self._running:
             time.sleep(0.5)
             now = time.time()
@@ -110,9 +115,48 @@ class _DebouncedHandler(FileSystemEventHandler):
                 try:
                     p = Path(path)
                     if p.exists():
-                        self._on_file_changed(p)
+                        # Intercept special scraper files
+                        if p.name == "ONLINE_SOURCES.md":
+                            self._handle_online_sources(p, scraper, URLExtractor)
+                        elif p.name == "SUGGESTED_URLS.md":
+                            self._handle_suggested_urls(p, scraper, URLExtractor)
+                        else:
+                            self._on_file_changed(p)
                 except Exception as e:
                     logger.error("Error processing file change %s: %s", path, e)
+
+    def _handle_online_sources(self, p: Path, scraper: 'WebScraper', extractor: type['URLExtractor']) -> None:
+        """Extract URLs from ONLINE_SOURCES.md and download them."""
+        text = p.read_text(encoding="utf-8", errors="replace")
+        urls = extractor.extract_urls(text)
+        
+        # In a real scenario we'd deduplicate against already downloaded URLs.
+        # For now, WebScraper will overwrite or we can just download all.
+        for url in urls:
+            # Check if we've already marked it in the file to avoid infinite loops
+            # Actually, ONLINE_SOURCES.md is manual, so downloading every time it changes might be much.
+            # A simple deduplication: check if file with this URL name already exists is hard due to uuid.
+            # We'll just trigger download. The user is expected to manage this file.
+            scraper.download_url(url)
+
+    def _handle_suggested_urls(self, p: Path, scraper: 'WebScraper', extractor: type['URLExtractor']) -> None:
+        """Find checked boxes in SUGGESTED_URLS.md, download them, and mark as downloaded."""
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+        modified = False
+        
+        new_lines = []
+        for line in lines:
+            if line.strip().startswith("- [x]") and "(Downloaded)" not in line:
+                urls = extractor.extract_urls(line)
+                for url in urls:
+                    if scraper.download_url(url):
+                        line = f"{line} (Downloaded)"
+                        modified = True
+                        break # Only process first URL per line
+            new_lines.append(line)
+            
+        if modified:
+            p.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
     def stop(self) -> None:
         """Stop the debounce processor."""

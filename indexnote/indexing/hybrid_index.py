@@ -116,12 +116,45 @@ class HybridIndexManager:
             logger.warning("No content extracted from: %s", file_path.name)
             return 0
 
+        # Extract URLs for discovery
+        try:
+            from indexnote.scraper.url_extractor import URLExtractor
+            found_urls = set()
+            for doc in documents:
+                found_urls.update(URLExtractor.extract_urls(doc.text))
+            
+            if found_urls:
+                self._append_suggested_urls(found_urls)
+        except Exception as e:
+            logger.error("Failed to extract URLs during indexing: %s", e)
+
         # 2. Index into both stores
         self._graph_index.insert_documents(documents)
         self._vector_index.insert_documents(documents)
 
         logger.info("Indexed %d chunk(s) from: %s", len(documents), file_path.name)
         return len(documents)
+
+    def _append_suggested_urls(self, urls: set[str]) -> None:
+        """Append newly discovered URLs to SUGGESTED_URLS.md."""
+        suggested_path = self._settings.source_notes_dir / "SUGGESTED_URLS.md"
+        
+        existing_text = ""
+        if suggested_path.exists():
+            existing_text = suggested_path.read_text(encoding="utf-8", errors="replace")
+            
+        new_urls = []
+        for url in urls:
+            if url not in existing_text:
+                new_urls.append(url)
+                
+        if new_urls:
+            with open(suggested_path, "a", encoding="utf-8") as f:
+                if not existing_text.endswith("\n") and existing_text:
+                    f.write("\n")
+                for url in sorted(new_urls):
+                    f.write(f"- [ ] {url}\n")
+            logger.info("Discovered and appended %d new URLs to SUGGESTED_URLS.md", len(new_urls))
 
     def index_files(self, file_paths: list[str | Path]) -> dict[str, int]:
         """
