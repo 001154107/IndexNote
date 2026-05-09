@@ -259,11 +259,40 @@ def cmd_help() -> None:
     table.add_row("/status", "Show all indexed files and their status")
     table.add_row("/reindex <pattern>", "Reindex files matching pattern")
     table.add_row("/graph", "Show knowledge graph statistics")
+    table.add_row("/output <type> <topic>", "Generate MAS output (report, table, script)")
     table.add_row("/help", "Show this help message")
     table.add_row("/quit or /exit", "Exit IndexNote")
     table.add_row("<any text>", "Query your indexed notes")
 
     console.print(table)
+
+
+def cmd_output(query: str, query_engine: QueryEngine, settings: Settings) -> None:
+    """Generate a MAS output document."""
+    parts = query.split(maxsplit=1)
+    if len(parts) < 2:
+        console.print("[yellow]Usage: /output <report|table|script> <topic>[/yellow]")
+        return
+        
+    output_type, topic = parts[0].lower(), parts[1]
+    if output_type not in ("report", "table", "script"):
+        console.print("[yellow]Error: type must be 'report', 'table', or 'script'[/yellow]")
+        return
+        
+    console.print(f"[bold cyan]🚀 Starting MAS Pipeline for '{output_type}'...[/bold cyan]")
+    try:
+        from indexnote.outputs.mas_pipeline import MASPipeline
+        pipeline = MASPipeline(query_engine, settings)
+        
+        console.print("[dim]  1. Researcher Agent gathering context...[/dim]")
+        # We don't have rich spinners without context managers, so just print
+        console.print("[dim]  2. Writer Agent drafting content...[/dim]")
+        console.print("[dim]  3. Reviewer Agent fact-checking and finalizing...[/dim]")
+        
+        out_path = pipeline.generate_output(output_type, topic)
+        console.print(f"[green]✅ Success! Output saved to: {out_path}[/green]")
+    except Exception as e:
+        console.print(f"[red]❌ Pipeline failed: {e}[/red]")
 
 
 def _format_size(size_bytes: int) -> str:
@@ -281,6 +310,10 @@ def main() -> None:
     setup_logging(settings.log_level)
 
     print_banner()
+
+    # Verify CUDA environment for audio parsing
+    from indexnote.utils.cuda_check import run_cuda_check
+    run_cuda_check()
 
     # Initialize components
     console.print("\n[bold]Initializing...[/bold]")
@@ -346,6 +379,8 @@ def main() -> None:
             elif user_input.lower().startswith("/reindex"):
                 pattern = user_input[len("/reindex"):].strip()
                 cmd_reindex(pattern, index_manager, file_tracker, watcher)
+            elif user_input.lower().startswith("/output"):
+                cmd_output(user_input[len("/output"):].strip(), query_engine, settings)
             elif user_input.lower() == "/graph":
                 cmd_graph(index_manager)
             elif user_input.startswith("/"):

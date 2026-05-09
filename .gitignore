@@ -28,7 +28,8 @@ data/chroma_db/
 data/kuzu_db/
 data/file_index.db
 
-# Example source notes
+# Example source notes & test outputs
+outputs/*.md
 source_notes/*
 
 # Model caches
@@ -49,3 +50,4 @@ logs/
 .pytest_cache/
 htmlcov/
 .coverage
+data/kuzu_db

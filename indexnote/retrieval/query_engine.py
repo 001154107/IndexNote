@@ -72,6 +72,16 @@ class QueryEngine:
         self._chat_history = []
         self._history_window = 5 # Number of previous turns to keep in context window
 
+    def get_context(self, user_query: str) -> tuple[str, list[Citation]]:
+        """Retrieve relevant context and formatted citations for a query."""
+        nodes = self._retriever.retrieve(user_query)
+        if not nodes:
+            return "", []
+        
+        citations = self._citation_engine.extract_citations(nodes)
+        context_str = self._citation_engine.format_context_for_llm(nodes, citations)
+        return context_str, citations
+
     def query(self, user_query: str) -> QueryResponse:
         """
         Answer a user query with source citations, maintaining conversation history.
@@ -84,10 +94,10 @@ class QueryEngine:
         """
         logger.info("Processing query: %s", user_query[:80])
 
-        # 1. Retrieve relevant nodes
-        nodes = self._retriever.retrieve(user_query)
+        # 1 & 2. Retrieve relevant context and citations
+        context_str, citations = self.get_context(user_query)
 
-        if not nodes:
+        if not context_str:
             return QueryResponse(
                 answer="I couldn't find any relevant information in your indexed notes. "
                        "Make sure you have files in the source_notes/ directory and they've been indexed.",
@@ -95,9 +105,6 @@ class QueryEngine:
                 citations_display="",
                 num_sources=0,
             )
-
-        # 2. Extract citations
-        citations = self._citation_engine.extract_citations(nodes)
         citations_display = self._citation_engine.format_citations_display(citations)
         context = self._citation_engine.format_context_for_llm(nodes, citations)
 

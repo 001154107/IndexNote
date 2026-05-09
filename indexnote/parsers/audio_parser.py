@@ -37,16 +37,35 @@ class AudioParser:
 
     def _get_model(self):
         """Lazy-load the Whisper model."""
+        import os
+        
         if self._model is None:
             try:
+                # Always attempt injection here just in case boot sequence missed it
+                from indexnote.utils.cuda_check import inject_pip_cuda_dlls
+                inject_pip_cuda_dlls()
+                
                 from faster_whisper import WhisperModel
 
                 logger.info("Loading Whisper model: %s", self._model_size)
-                self._model = WhisperModel(
-                    self._model_size,
-                    device="auto",
-                    compute_type="auto",
-                )
+                
+                force_cpu = os.environ.get("INDEXNOTE_FORCE_CPU") == "1"
+                device = "cpu" if force_cpu else "auto"
+                compute_type = "int8" if force_cpu else "auto"
+                
+                try:
+                    self._model = WhisperModel(
+                        self._model_size,
+                        device=device,
+                        compute_type=compute_type,
+                    )
+                except Exception as cuda_err:
+                    logger.warning("CUDA/auto initialization failed (%s). Falling back to CPU with int8...", cuda_err)
+                    self._model = WhisperModel(
+                        self._model_size,
+                        device="cpu",
+                        compute_type="int8",
+                    )
             except ImportError:
                 raise ImportError(
                     "faster-whisper is required for audio parsing. "
@@ -78,9 +97,35 @@ class AudioParser:
 
             # Collect all segments into full transcript
             transcript_parts = []
-            for segment in segments:
-                timestamp = f"[{segment.start:.1f}s - {segment.end:.1f}s]"
-                transcript_parts.append(f"{timestamp} {segment.text.strip()}")
+            try:
+                for segment in segments:
+                    timestamp = f"[{segment.start:.1f}s - {segment.end:.1f}s]"
+                    transcript_parts.append(f"{timestamp} {segment.text.strip()}")
+            except Exception as runtime_err:
+                err_msg = str(runtime_err).lower()
+                if "cublas" in err_msg or "cuda" in err_msg or "dll" in err_msg:
+                    logger.warning("CUDA/DLL error during transcription (%s). Falling back to CPU with int8...", runtime_err)
+                    
+                    from faster_whisper import WhisperModel
+                    self._model = WhisperModel(
+                        self._model_size,
+                        device="cpu",
+                        compute_type="int8",
+                    )
+                    model = self._model
+                    
+                    # Retry transcription
+                    segments, info = model.transcribe(
+                        str(file_path),
+                        beam_size=5,
+                        language=None,
+                    )
+                    transcript_parts = []
+                    for segment in segments:
+                        timestamp = f"[{segment.start:.1f}s - {segment.end:.1f}s]"
+                        transcript_parts.append(f"{timestamp} {segment.text.strip()}")
+                else:
+                    raise
 
             full_transcript = "\n".join(transcript_parts)
 
