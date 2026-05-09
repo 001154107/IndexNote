@@ -61,6 +61,11 @@ class _DebouncedHandler(FileSystemEventHandler):
     def _should_ignore(self, path: str) -> bool:
         """Check if a file event should be ignored."""
         p = Path(path)
+        
+        # Explicitly allow operational files for scraper logic
+        if p.name in {"ONLINE_SOURCES.md", "SUGGESTED_URLS.md"}:
+            return False
+            
         if p.name in IGNORED_PATTERNS:
             return True
         if not is_supported_file(p):

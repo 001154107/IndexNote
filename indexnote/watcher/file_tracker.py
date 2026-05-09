@@ -89,7 +89,7 @@ class FileTracker:
         current_hash = self.compute_hash(file_path)
         return current_hash != row[0]
 
-    def mark_indexed(self, file_path: str | Path) -> None:
+    def mark_indexed(self, file_path: str | Path, status: str = "indexed") -> None:
         """Mark a file as successfully indexed with its current hash."""
         file_path = Path(file_path).resolve()
         file_hash = self.compute_hash(file_path)
@@ -100,9 +100,18 @@ class FileTracker:
             """
             INSERT OR REPLACE INTO tracked_files
             (file_path, file_hash, file_size, last_indexed_at, status)
-            VALUES (?, ?, ?, ?, 'indexed')
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (str(file_path), file_hash, file_size, now),
+            (str(file_path), file_hash, file_size, now, status),
+        )
+        self._conn.commit()
+
+    def mark_status(self, file_path: str | Path, status: str) -> None:
+        """Update just the status of an existing tracked file."""
+        file_path = str(Path(file_path).resolve())
+        self._conn.execute(
+            "UPDATE tracked_files SET status = ? WHERE file_path = ?",
+            (status, file_path),
         )
         self._conn.commit()
 

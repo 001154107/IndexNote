@@ -96,12 +96,13 @@ class HybridIndexManager:
         parser = self._get_parser(parser_type)
         return parser.parse(file_path)
 
-    def index_file(self, file_path: str | Path) -> int:
+    def index_file(self, file_path: str | Path, on_graph_complete=None) -> int:
         """
         Parse and index a single file into both Graph and Vector stores.
 
         Args:
             file_path: Path to the file to index.
+            on_graph_complete: Optional callback when async graph indexing completes.
 
         Returns:
             Number of document chunks indexed.
@@ -134,9 +135,17 @@ class HybridIndexManager:
         logger.info("Fast Vector Indexing complete for: %s", file_path.name)
         
         # Slow Stage: Graph indexing (asynchronous background queue)
+        def _graph_task():
+            try:
+                self._graph_index.insert_documents(documents)
+                if on_graph_complete:
+                    on_graph_complete()
+            except Exception as e:
+                logger.error("Graph indexing failed for %s: %s", file_path.name, e)
+
         from indexnote.indexing.background_queue import BackgroundQueue
         queue = BackgroundQueue()
-        queue.submit(self._graph_index.insert_documents, documents)
+        queue.submit(_graph_task)
         logger.info("Slow Graph Indexing queued for: %s", file_path.name)
 
         logger.info("Indexed %d chunk(s) from: %s", len(documents), file_path.name)

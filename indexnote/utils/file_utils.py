@@ -71,6 +71,7 @@ _MHT_EXTENSIONS: set[str] = {
 # Files/dirs to always ignore
 IGNORED_PATTERNS: set[str] = {
     ".gitkeep", ".DS_Store", "Thumbs.db", "desktop.ini",
+    "ONLINE_SOURCES.md", "SUGGESTED_URLS.md"
 }
 
 

@@ -81,15 +81,22 @@ def scan_and_index(
     changed_files = []
     up_to_date = 0
 
+    tracked = {Path(r.file_path).resolve(): r.status for r in file_tracker.get_all_tracked()}
+    incomplete_files = []
+
     for fp in files:
+        fp_res = fp.resolve()
+        status = tracked.get(fp_res)
         if file_tracker.is_new(fp):
             new_files.append(fp)
         elif file_tracker.has_changed(fp):
             changed_files.append(fp)
+        elif status == "vector_indexed":
+            incomplete_files.append(fp)
         else:
             up_to_date += 1
 
-    if not new_files and not changed_files:
+    if not new_files and not changed_files and not incomplete_files:
         console.print(
             f"[green]✅ All {up_to_date} file(s) up to date[/green]"
         )
@@ -100,11 +107,13 @@ def scan_and_index(
         console.print(f"[cyan]📄 New files: {len(new_files)}[/cyan]")
     if changed_files:
         console.print(f"[yellow]📝 Changed files: {len(changed_files)}[/yellow]")
+    if incomplete_files:
+        console.print(f"[magenta]⏳ Resuming incomplete files: {len(incomplete_files)}[/magenta]")
     if up_to_date:
         console.print(f"[dim]✅ Up to date: {up_to_date}[/dim]")
 
-    # Index new + changed files
-    to_index = new_files + changed_files
+    # Index new + changed + incomplete files
+    to_index = new_files + changed_files + incomplete_files
     indexed_count = 0
 
     for i, fp in enumerate(to_index, 1):
@@ -113,9 +122,13 @@ def scan_and_index(
             end=" ",
         )
         try:
-            count = index_manager.index_file(fp)
-            file_tracker.mark_indexed(fp)
-            console.print(f"[green]✅ {count} chunk(s)[/green]")
+            # We must bind fp to the callback closure
+            def make_callback(path=fp):
+                return lambda: file_tracker.mark_status(path, "indexed")
+                
+            count = index_manager.index_file(fp, on_graph_complete=make_callback())
+            file_tracker.mark_indexed(fp, status="vector_indexed")
+            console.print(f"[green]✅ {count} chunk(s) (Graph queued)[/green]")
             indexed_count += 1
         except Exception as e:
             file_tracker.mark_error(fp, str(e))
@@ -140,9 +153,12 @@ def handle_file_change(
     if settings.auto_reindex:
         logger.info("Auto-reindexing: %s", file_path.name)
         try:
-            index_manager.index_file(file_path)
-            file_tracker.mark_indexed(file_path)
-            logger.info("Reindexed: %s", file_path.name)
+            def make_callback(path=file_path):
+                return lambda: file_tracker.mark_status(path, "indexed")
+                
+            index_manager.index_file(file_path, on_graph_complete=make_callback())
+            file_tracker.mark_indexed(file_path, status="vector_indexed")
+            logger.info("Reindexed (Graph queued): %s", file_path.name)
         except Exception as e:
             file_tracker.mark_error(file_path, str(e))
             logger.error("Failed to reindex %s: %s", file_path.name, e)
@@ -166,7 +182,13 @@ def cmd_status(file_tracker: FileTracker) -> None:
     table.add_column("Indexed At", width=20)
 
     for i, rec in enumerate(records, 1):
-        status_style = "green" if rec.status == "indexed" else "red"
+        if rec.status == "indexed":
+            status_style = "green"
+        elif rec.status == "vector_indexed":
+            status_style = "yellow"
+        else:
+            status_style = "red"
+            
         size_str = _format_size(rec.file_size)
         table.add_row(
             str(i),
@@ -201,9 +223,12 @@ def cmd_reindex(
     console.print(f"Reindexing {len(matches)} file(s)...")
     for fp in matches:
         try:
-            count = index_manager.index_file(fp)
-            file_tracker.mark_indexed(fp)
-            console.print(f"  [green]✅ {fp.name}: {count} chunk(s)[/green]")
+            def make_callback(path=fp):
+                return lambda: file_tracker.mark_status(path, "indexed")
+                
+            count = index_manager.index_file(fp, on_graph_complete=make_callback())
+            file_tracker.mark_indexed(fp, status="vector_indexed")
+            console.print(f"  [green]✅ {fp.name}: {count} chunk(s) (Graph queued)[/green]")
         except Exception as e:
             file_tracker.mark_error(fp, str(e))
             console.print(f"  [red]❌ {fp.name}: {e}[/red]")
