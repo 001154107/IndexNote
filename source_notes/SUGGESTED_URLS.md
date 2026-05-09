@@ -6,3 +6,4 @@ To download and index a URL, simply check its box (change `[ ]` to `[x]`) and sa
 - [ ] https://example.com/
 
 - [ ] https://ollama.com/download
+- [ ] https://iana.org/domains/example

@@ -39,10 +39,13 @@ class FileTracker:
     """
 
     def __init__(self, settings: Settings | None = None):
+        import threading
         self._settings = settings or get_settings()
         self._db_path = self._settings.file_index_db_path
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self._db_path))
+        # check_same_thread=False allows background worker to update statuses
+        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
+        self._lock = threading.Lock()
         self._create_table()
 
     def _create_table(self) -> None:
@@ -96,24 +99,26 @@ class FileTracker:
         file_size = file_path.stat().st_size
         now = datetime.now(timezone.utc).isoformat()
 
-        self._conn.execute(
-            """
-            INSERT OR REPLACE INTO tracked_files
-            (file_path, file_hash, file_size, last_indexed_at, status)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (str(file_path), file_hash, file_size, now, status),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT OR REPLACE INTO tracked_files
+                (file_path, file_hash, file_size, last_indexed_at, status)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (str(file_path), file_hash, file_size, now, status),
+            )
+            self._conn.commit()
 
     def mark_status(self, file_path: str | Path, status: str) -> None:
         """Update just the status of an existing tracked file."""
         file_path = str(Path(file_path).resolve())
-        self._conn.execute(
-            "UPDATE tracked_files SET status = ? WHERE file_path = ?",
-            (status, file_path),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "UPDATE tracked_files SET status = ? WHERE file_path = ?",
+                (status, file_path),
+            )
+            self._conn.commit()
 
     def mark_error(self, file_path: str | Path, error: str = "") -> None:
         """Mark a file as having an indexing error."""
@@ -127,23 +132,25 @@ class FileTracker:
             file_hash = "error"
             file_size = 0
 
-        self._conn.execute(
-            """
-            INSERT OR REPLACE INTO tracked_files
-            (file_path, file_hash, file_size, last_indexed_at, status)
-            VALUES (?, ?, ?, ?, 'error')
-            """,
-            (str(file_path), file_hash, file_size, now),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT OR REPLACE INTO tracked_files
+                (file_path, file_hash, file_size, last_indexed_at, status)
+                VALUES (?, ?, ?, ?, 'error')
+                """,
+                (str(file_path), file_hash, file_size, now),
+            )
+            self._conn.commit()
 
     def remove(self, file_path: str | Path) -> None:
         """Remove a file from tracking."""
         file_path = str(Path(file_path).resolve())
-        self._conn.execute(
-            "DELETE FROM tracked_files WHERE file_path = ?", (file_path,)
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM tracked_files WHERE file_path = ?", (file_path,)
+            )
+            self._conn.commit()
 
     def get_all_tracked(self) -> list[FileRecord]:
         """Return all tracked file records."""

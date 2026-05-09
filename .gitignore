@@ -29,7 +29,7 @@ data/kuzu_db/
 data/file_index.db
 
 # Example source notes
-source_notes/web_downloads/*.html
+source_notes/*
 
 # Model caches
 models/
